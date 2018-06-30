@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Diagnostics;
+using System.Collections.Concurrent;
 
 namespace FindDoubles
 {
@@ -25,26 +26,36 @@ namespace FindDoubles
         }
 
 
-        bool comparefile(String f1, String f2)
-        {
+        public static bool comparefile(String f1, String f2)
+        { 
+
+            const int bufsize = 100 * 1024 * 1024; // 100 mb
 
             try
             {
                 var fs1 = new FileStream(f1, FileMode.Open, FileAccess.Read);
                 var fs2 = new FileStream(f2, FileMode.Open, FileAccess.Read);
+
+                if (fs1.Length != fs2.Length) return false;
+
                 try
                 {
-                    byte[] buf1 = new byte[1024 * 1];
-                    byte[] buf2 = new byte[1024 * 1];
+                    byte[] buf1 = new byte[bufsize];
+                    byte[] buf2 = new byte[bufsize];
 
-                    fs1.Read(buf1, 0, 1024 * 1);
-                    fs2.Read(buf2, 0, 1024 * 1);
+                    while (true)
+                    {
+                        int bytesRead1 = fs1.Read(buf1, 0, bufsize);
+                        int bytesRead2 = fs2.Read(buf2, 0, bufsize);
 
-                    for (int i = 0; i < 1024 * 1; i++)
-                        if (buf1[i] != buf2[i])
-                            return false;
+                        if (bytesRead1 != bytesRead2) return false;
+                        if (bytesRead1 == 0) return true;
 
-                    return true;
+                        for (int i = 0; i < bytesRead1; i++)
+                            if (buf1[i] != buf2[i])
+                                return false;
+                    }
+
                 }
                 finally
                 {
@@ -98,8 +109,8 @@ namespace FindDoubles
         }
 
 
-
-        public Dictionary<String, uint> crclibrary;
+        bool crclibrarychanged = false;
+        public ConcurrentDictionary<String, uint> crclibrary;
 
         uint CompureCrc(String FileName)
         {
@@ -107,13 +118,19 @@ namespace FindDoubles
 
             if (crclibrary.TryGetValue(FileName, out crc)) return crc;
 
-            var fs1 = new FileStream(FileName, FileMode.Open, FileAccess.Read);
             byte[] buf1 = new byte[crclength];
-            fs1.Read(buf1, 0, crclength);
 
+            var fs1 = new FileStream(FileName, FileMode.Open, FileAccess.Read);
+     
+            fs1.Read(buf1, 0, crclength);
             crc = Crc32C.Crc32CAlgorithm.Compute(buf1);
 
-            crclibrary.Add(FileName, crc);
+            fs1.Seek(crclength, SeekOrigin.End);
+            fs1.Read(buf1, 0, crclength);
+            Crc32C.Crc32CAlgorithm.Append(crc,buf1);
+
+            crclibrary.TryAdd(FileName, crc);
+            crclibrarychanged = true;
 
             return crc;
         }
@@ -136,21 +153,21 @@ namespace FindDoubles
         }
         void SaveCRC()
         {
-            File.WriteAllLines("crc" + crclength + ".txt", crclibrary.Select(f => f.Key + "=" + f.Value));
+            if (crclibrarychanged)
+             File.WriteAllLines("crc" + crclength + ".txt", crclibrary.Select(f => f.Key + "=" + f.Value));
         }
 
 
         void LoadCRC()
         {
-            crclibrary = new Dictionary<String, uint>();
+            crclibrary = new ConcurrentDictionary<String, uint>();
             var filename = "crc" + crclength + ".txt";
 
             if (File.Exists(filename))
-
                 foreach (var line in File.ReadAllLines(filename))
                 {
                     var p = line.LastIndexOf('=');
-                    crclibrary.Add(line.Substring(0, p), uint.Parse(line.Substring(p + 1)));
+                    crclibrary.TryAdd(line.Substring(0, p), uint.Parse(line.Substring(p + 1)));
                 }
         }
 
@@ -172,11 +189,19 @@ namespace FindDoubles
         }
 
 
-        List<FileData> Filelist;
+        ConcurrentBag<FileData> Filelist;
         SortedList<long, List<FileData>> sl = new SortedList<long, List<FileData>>();
 
         void adddir(object dir)
         {
+
+
+            Invoke((Action)(
+                 () => {
+                    label3.Text = dir.ToString();
+                 }
+                )
+                );
 
             //try
             //{
@@ -220,7 +245,7 @@ namespace FindDoubles
                 );
             }
 
-            SaveCRC();
+            
 
 
         }
@@ -231,12 +256,19 @@ namespace FindDoubles
             //Task.Factory.StartNew(adddir, (object)@"k:\Private\");
 
             LoadCRC();
-            Filelist = new List<FileData>();
+            Filelist = new ConcurrentBag<FileData>();
 
             Task.Factory.StartNew(() =>
            {
+               var g = textBox2.Lines.GroupBy(f => f.Substring(1)).Select(f=>f.ToList()).ToList();
+               Parallel.ForEach(g, (f)=>
+               {
+                   f.ToList().ForEach(adddir);
+               });
 
-               foreach (var s in textBox2.Lines) adddir(s);
+               SaveCRC();
+
+               //foreach (var s in textBox2.Lines) adddir(s);
 
                long totalsize = 0;
 
