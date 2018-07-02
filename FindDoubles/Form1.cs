@@ -440,15 +440,22 @@ namespace FindDoubles
 
                                     if (delfile.Name.ToLower() != checkfile.Name.ToLower())
                                     {
-                                        var crc1 = CompureFullCrc(delfile.Name);
-                                        var crc2 = CompureFullCrc(checkfile.Name);
 
-                                        if (crc1 == crc2)
+                                       var (result,crc1) = Common.parallel_comparefile(delfile.Name, checkfile.Name);
+                                        //var crc1 = CompureFullCrc(delfile.Name);
+                                        //var crc2 = CompureFullCrc(checkfile.Name);
+
+                                        if (result)
                                         {
                                             Log("delete: " + delfile.Name + String.Format(" crc:{0:X8}", crc1) + " with compare: " + checkfile.Name);
 
                                             log.AppendText("delete: " + delfile.Name + "\r\n");
-                                            File.Delete(delfile.Name);
+
+                                            var dst = "i" + delfile.Name.Substring(1);
+                                            Directory.CreateDirectory(Path.GetDirectoryName(dst));
+                                            File.Move(delfile.Name, dst);
+
+                                            //File.Delete(delfile.Name);
                                         }
 
                                         delfile.Deleted = true;
@@ -532,10 +539,40 @@ namespace FindDoubles
             var path = detail.SelectedRows[0].Cells[0].Value.ToString();
             Process.Start(new System.Diagnostics.ProcessStartInfo()
             {
+                WindowStyle = ProcessWindowStyle.Minimized,
                 FileName = path,
                 UseShellExecute = true,
                 Verb = "open"
             });
+        }
+
+        private void button5_Click(object sender, EventArgs e)
+        {
+            // работа с файлами старой видеокамеры, больше не надо
+            foreach (var f in  Directory.EnumerateFiles(@"d:\[MAIN_MEDIA]\[STAGE2]\HDR-UX20E\", "*.mts", SearchOption.AllDirectories))
+            {
+                var filedate = Common.MtsFileDate(f);
+
+                var dir = @"d:\[MAIN_MEDIA]\[STAGE2]\HDR-UX20E-ready\" + String.Format("{0:d4}_{1:d2}_{2:d2}", filedate.Year, filedate.Month, filedate.Day);
+                var filename = String.Format("{0:d4}_{1:d2}_{2:d2}-{3:d2}_{4:d2}_{5:d2}_UX20E.m2ts", filedate.Year, filedate.Month, filedate.Day
+                    , filedate.Hour, filedate.Minute, filedate.Second
+                    );
+
+                var targetfile = dir + @"\"+filename;
+
+                if (!File.Exists(targetfile))
+                {
+                    Directory.CreateDirectory(dir);
+                    File.Move(f, targetfile);
+                }
+
+                else
+                {
+                    error.AppendText(f + "  - " + dir + " - " + filename + "\r\n");
+                }
+
+            }
+
         }
     }
 }

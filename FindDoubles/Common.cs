@@ -1,15 +1,51 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using TotCommonLibrary;
 
 namespace FindDoubles
 {
     public class Common
     {
+
+        public static DateTime MtsFileDate(String fn)
+        {
+
+            var pi = new ProcessStartInfo(@"e:\Downloads\MediaInfo_CLI_18.05_Windows_x64\MediaInfo.exe", "--Output=XML \"" + fn + "\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                 
+            };
+
+            var p = Process.Start(pi);
+            string output = p.StandardOutput.ReadToEnd();
+            p.WaitForExit();
+
+            return DateTime.Parse(output.AfterFirst("<Recorded_Date>").BeforeFirst("+"));
+
+        }
+
+        public static uint CompureFullCrc(String FileName)
+        {
+            uint crc = 0;
+
+            using (FileStream fs = File.Open(FileName, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                byte[] buff = new byte[1024];
+                while (fs.Length != fs.Position)
+                {
+                    int count = fs.Read(buff, 0, buff.Length);
+                    crc = Crc32C.Crc32CAlgorithm.Append(crc, buff, 0, count);
+                }
+            }
+            return crc;
+        }
 
         public static unsafe bool SequenceEqual(byte[] thisArray, byte[] array)
         {
@@ -58,15 +94,27 @@ namespace FindDoubles
         const int bufsize = 100 * 1024 * 1024; // 100 mb
         class FileCacher
         {
-            public byte[] buf = new byte[bufsize];
+            byte[][] buf;
 
             FileStream fs;
-            public int BytesRead;
+            int cursor = 1;
+            public int BytesRead { get; private set; }
 
-            public AutoResetEvent NeedData, HaveData;
+            public byte[] CurrentBuf { get
+                {
+                    return buf[cursor];
+                } }
+
+            public uint crc { get; private set; }
+
+
+            public AutoResetEvent HaveData { get; private set; }
+            public AutoResetEvent NeedData { get; private set; }
 
             public FileCacher(String fn)
             {
+                buf = new byte[2][];
+
                 NeedData = new AutoResetEvent(true);
                 HaveData = new AutoResetEvent(false);
                 fs = new FileStream(fn, FileMode.Open, FileAccess.Read);
@@ -74,10 +122,17 @@ namespace FindDoubles
 
             public void Execute()
             {
+                crc = 0;
                 while (true)
                 {
                     NeedData.WaitOne();
-                    BytesRead = fs.Read(buf, 0, bufsize);
+
+                    cursor = (cursor + 1) % 2;
+
+                    if (buf[cursor] == null) buf[cursor] = new byte[bufsize];
+
+                    BytesRead = fs.Read(buf[cursor], 0, bufsize);
+
                     HaveData.Set();
 
                     if (BytesRead==0)
@@ -85,11 +140,13 @@ namespace FindDoubles
                         fs.Close();
                         return;
                     }
+
+                    crc=Crc32C.Crc32CAlgorithm.Append(crc, buf[cursor], 0, BytesRead);
                 }
             }
         }
 
-        public static bool parallel_comparefile(String f1, String f2)
+        public static (bool, uint) parallel_comparefile(String f1, String f2)
         {
             FileCacher fc1, fc2;
 
@@ -105,24 +162,26 @@ namespace FindDoubles
                 fc2.HaveData.WaitOne();
                 fc1.HaveData.WaitOne();
 
-                if (fc1.BytesRead != fc2.BytesRead) return false;
-                if (fc1.BytesRead == 0) return true;
+                if (fc1.BytesRead != fc2.BytesRead) return (false,0);
+                if (fc1.BytesRead == 0) 
+                {
+                    return (fc1.crc == fc2.crc, fc1.crc);
+                }
 
-
-                if (!SequenceEqual(fc1.buf, fc2.buf)) return false;
-
-                //for (int i = 0; i < fc1.BytesRead; i++)
-                //    if (fc1.buf[i] != fc2.buf[i])
-                //        return false;
+                var buf1 = fc1.CurrentBuf;
+                var buf2 = fc2.CurrentBuf;
 
                 fc1.NeedData.Set();
                 fc2.NeedData.Set();
+
+                if (!SequenceEqual(buf1, buf2)) return (false, 0);
+   
             }
         }
 
         public static bool comparefile(String f1, String f2)
         {
-            bool samedisk = f1[0] == f2[0] && true;
+            bool samedisk = f1[0] == f2[0];
            
 
             try

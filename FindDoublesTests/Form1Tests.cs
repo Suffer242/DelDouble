@@ -15,9 +15,18 @@ namespace FindDoubles.Tests
         public void comparefileTest()
         {
 
-            var r = Common.parallel_comparefile(@"d:\1\Ready.Player.One.2018.WEB-DL.720p.ExKinoRay.mkv",
-                @"e:\downloads\Ready.Player.One.2018.WEB-DL.720p.ExKinoRay.mkv");
-            Assert.AreEqual(r, true);
+            Common.MtsFileDate(@"d:\[MAIN_MEDIA]\[STAGE2]\HDR-UX20E\1-сентября\AVCHD\BDMV\STREAM\00004.MTS");
+
+
+            Assert.AreEqual(true, true);
+            /*
+             * 
+             * 
+                        var r = Common.parallel_comparefile(@"d:\1\Ready.Player.One.2018.WEB-DL.720p.ExKinoRay.mkv",
+                            @"e:\downloads\Ready.Player.One.2018.WEB-DL.720p.ExKinoRay.mkv");
+                        Assert.AreEqual(r, true);
+                        */
+
         }
     }
 }
