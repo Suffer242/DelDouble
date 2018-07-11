@@ -15,7 +15,20 @@ namespace FindDoubles.Tests
         public void comparefileTest()
         {
 
-            Common.MtsFileDate(@"d:\[MAIN_MEDIA]\[STAGE2]\HDR-UX20E\1-сентября\AVCHD\BDMV\STREAM\00004.MTS");
+            CrcLibrary crcLibrary = new CrcLibrary(new CrcIniStore(@"f:\_debug\test.txt"));
+
+            FileList fileList = new FileList(1, new CrcCalculator(crcLibrary)) {CallBack = Console.WriteLine};
+
+
+            fileList.AddDirectory(@"f:\____PHOTO_C\");
+
+            crcLibrary.SaveCrc();
+
+            var list = fileList.DoubleDirectoryList;
+
+
+            //  Common.MtsFileDate(@"d:\[MAIN_MEDIA]\[STAGE2]\HDR-UX20E\1-сентября\AVCHD\BDMV\STREAM\00004.MTS");
+
 
 
             Assert.AreEqual(true, true);

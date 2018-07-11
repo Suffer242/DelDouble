@@ -1,29 +1,27 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace FindDoubles.Classes
+
+namespace FindDoubles
 {
-    class CrcLibrary
+    public class CrcLibrary
     {
-        IDictionary<String, uint> _crclibrary;
-        bool _crclibrarychanged = false;
-        ICrcStore _store;
+        readonly IDictionary<String, uint> _crclibrary;
+        bool _crclibrarychanged;
+        readonly ICrcStore _store;
 
-        public CrcLibrary(ICrcStore Store = null, IDictionary<String, uint> Dictionary = null)
+        public CrcLibrary(ICrcStore store, IDictionary<String, uint> dictionary = null)
         {
-            _store = Store;
-            _crclibrary = Dictionary!=null ? Dictionary : new Dictionary<String, uint>();
-            _store.LoadCRC(_crclibrary);
+            _store = store;
+            _crclibrary = dictionary ?? new Dictionary<String, uint>();
+            _store.LoadCrc(_crclibrary);
         }
 
-        public void SaveCRC()
+        public void SaveCrc()
         {
-            if (_crclibrarychanged) _store.SaveCRC(_crclibrary);
+            if (_crclibrarychanged) _store.SaveCrc(_crclibrary);
         }
 
         public void Add(String key, uint value)
@@ -32,42 +30,41 @@ namespace FindDoubles.Classes
             _crclibrarychanged = true;
         }
 
-        public (bool,uint) Get(String key)
+        public bool Get(String key, out uint result)
         {
-            uint result;
-            return (_crclibrary.TryGetValue(key, out result), result);   
+            return _crclibrary.TryGetValue(key, out result);
         }
     }
 
     public interface ICrcStore
     {
-         void LoadCRC(IDictionary<String, uint> _crclibrary);
-         void SaveCRC(IDictionary<String, uint> _crclibrary);
+         void LoadCrc(IDictionary<String, uint> crclibrary);
+         void SaveCrc(IDictionary<String, uint> crclibrary);
     }
 
 
 
     public class CrcIniStore : ICrcStore
     {
-        String _filename;
-        public CrcIniStore(String FileName)
+        readonly String _filename;
+        public CrcIniStore(String fileName)
         {
-            _filename = FileName;
+            _filename = fileName;
         }
-        public void LoadCRC(IDictionary<String, uint> _crclibrary)
+        public void LoadCrc(IDictionary<String, uint> crclibrary)
         {
             if (File.Exists(_filename))
                 foreach (var line in File.ReadAllLines(_filename))
                 {
                     var p = line.LastIndexOf('=');
-                    _crclibrary.Add(line.Substring(0, p), uint.Parse(line.Substring(p + 1)));
+                    crclibrary.Add(line.Substring(0, p), uint.Parse(line.Substring(p + 1)));
                 }
         }
 
-        public void SaveCRC(IDictionary<String, uint> _crclibrary)
+        public void SaveCrc(IDictionary<String, uint> crclibrary)
         { 
 
-                File.WriteAllLines(_filename, _crclibrary.Select(f => f.Key + "=" + f.Value));
+                File.WriteAllLines(_filename, crclibrary.Select(f => f.Key + "=" + f.Value));
         }
     }
 }

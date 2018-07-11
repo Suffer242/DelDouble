@@ -190,6 +190,7 @@ namespace FindDoubles
 
 
         ConcurrentBag<FileData> Filelist;
+
         SortedList<long, List<FileData>> sl = new SortedList<long, List<FileData>>();
 
         void adddir(object dir)
